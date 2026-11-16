@@ -19,7 +19,7 @@
   --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
   --grid: #e1e0d9; --border: rgba(11,11,11,.10); --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
   /* line identity (categorical) */
-  --l-master: #2a78d6; --l-db: #1baf7a; --l-r1: #eb6834; --l-r2: #6250d6; --l-r3: #e87ba4;
+  --l-master: #2a78d6; --l-db: #1baf7a; --l-r1: #eb6834; --l-r2: #6250d6;
   /* status (reserved) */
   --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
 }
@@ -28,7 +28,7 @@
   --plane: #0d0d0d; --surface: #1a1a19; --surface-2: #242422;
   --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --border: rgba(255,255,255,.10); --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
-  --l-master: #3987e5; --l-db: #199e70; --l-r1: #d95926; --l-r2: #9085e9; --l-r3: #d55181;
+  --l-master: #3987e5; --l-db: #199e70; --l-r1: #d95926; --l-r2: #9085e9;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--plane); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -262,7 +262,6 @@ const LINES = {
   db:     { label: 'db-scripts', c: 'var(--l-db)' },
   '26.4': { label: '26.4',       c: 'var(--l-r1)' },
   '26.3': { label: '26.3',       c: 'var(--l-r2)' },
-  '26.2': { label: '26.2',       c: 'var(--l-r3)' },
 };
 
 /* The checklist every release goes through after the branch is cut. */
@@ -311,13 +310,6 @@ const RELEASES = [
       { v: '26.3.2', status: 'progress', date: '2026-11-13', owner: 'Lucas M.', mask: [1, 1, 1, 0, 1, 0, 0],
         note: 'Docker image push failed: storage quota reached on orion-docker-local.' },
     ] },
-  { v: '26.2', phase: 'Maintenance', cut: '2026-05-11', sha: 'c3e88a0', xb: 170, lane: 515,
-    tasks: allDone('2026-05-12', '2026-05-11', '2026-05-20', '2026-05-25', '2026-05-27', '2026-06-08', '2026-06-11', '2026-06-15'),
-    hotfixes: [
-      { v: '26.2.1', status: 'done', date: '2026-07-06', owner: 'Lucas M.' },
-      { v: '26.2.2', status: 'done', date: '2026-08-24', owner: 'Lucas M.' },
-      { v: '26.2.3', status: 'done', date: '2026-10-19', owner: 'Lucas M.' },
-    ] },
 ];
 
 const HEAD_264 = [
@@ -356,9 +348,6 @@ add({ id: 'master:cut-27.1', line: 'master', name: '27.1 cut', title: 'Create br
   status: 'todo', date: '2027-02-15', subBy: { todo: 'planned 15 Feb' }, ref: 'bitbucket.example.com/orion/suite/branches',
   subs: ['release/27.1 created from master', 'Branch permissions applied', 'Default reviewers & merge checks'] });
 
-add({ id: 'db:26.2', line: 'db', name: 'head.txt · 26.2', title: 'releases/26.2/head.txt', system: 'DB scripts', owner: 'Inès D.', status: 'done', date: '2026-05-11',
-  scripts: 38, subBy: { done: '38 scripts' }, ref: 'bitbucket.example.com/orion/db-scripts/releases/26.2/head.txt',
-  subs: ['releases/26.2/head.txt created', 'Every listed script exists in the repo', 'Execution order reviewed by DBA'] });
 add({ id: 'db:26.3', line: 'db', name: 'head.txt · 26.3', title: 'releases/26.3/head.txt', system: 'DB scripts', owner: 'Inès D.', status: 'done', date: '2026-08-17',
   scripts: 41, subBy: { done: '41 scripts' }, ref: 'bitbucket.example.com/orion/db-scripts/releases/26.3/head.txt',
   subs: ['releases/26.3/head.txt created', 'Every listed script exists in the repo', 'Execution order reviewed by DBA'] });
@@ -474,12 +463,12 @@ function renderMap() {
   const dim = (...lines) => focusLine && !lines.includes(focusLine) ? ' dim' : '';
 
   // interchange walkways between the code line and the DB line
-  g.link = [170, 390, 610, 1140].map(x => `<path class="walk" d="M${x} ${DY + 15} V${MY - 16}"/>`).join('');
+  g.link = [390, 610, 1140].map(x => `<path class="walk" d="M${x} ${DY + 15} V${MY - 16}"/>`).join('');
 
   // DB scripts line
   g.db = `<path class="track" style="stroke:var(--l-db)" d="M112 ${DY} H1140"/><path class="track pending" style="stroke:var(--l-db)" d="M1140 ${DY} H1520"/>`
     + pill(24, DY, 88, 'db')
-    + stationSvg(S['db:26.2'], 170, DY, { pos: 'above' }) + stationSvg(S['db:26.3'], 390, DY, { pos: 'above' })
+    + stationSvg(S['db:26.3'], 390, DY, { pos: 'above' })
     + stationSvg(S['db:26.4'], 610, DY, { pos: 'above' }) + stationSvg(S['db:master'], 1140, DY, { pos: 'above' });
 
   // master line, with feature / fix branches looping above it
@@ -515,7 +504,7 @@ function renderMap() {
   });
 
   document.getElementById('map').innerHTML =
-    `<svg viewBox="0 0 1560 585" role="group" aria-label="Subway map of the software lifecycle">
+    `<svg viewBox="0 0 1560 485" role="group" aria-label="Subway map of the software lifecycle">
       <g class="ln${dim('master', 'db')}">${g.link}</g>
       ${RELEASES.map(r => `<g class="ln${dim(r.v)}">${g[r.v]}</g>`).join('')}
       <g class="ln${dim('db')}">${g.db}</g>
@@ -609,7 +598,7 @@ function headPreview() {
 }
 
 function renderDb() {
-  const rows = [['head.txt (master)', 'db:master'], ['releases/26.4/head.txt', 'db:26.4'], ['releases/26.3/head.txt', 'db:26.3'], ['releases/26.2/head.txt', 'db:26.2']];
+  const rows = [['head.txt (master)', 'db:master'], ['releases/26.4/head.txt', 'db:26.4'], ['releases/26.3/head.txt', 'db:26.3']];
   document.getElementById('db').innerHTML = `
     <table><thead><tr><th>File</th><th>Scripts</th><th>State</th><th>Detail</th></tr></thead><tbody>
     ${rows.map(([f, id]) => { const st = S[id]; return `<tr class="click" data-id="${id}"><td class="mono">${f}</td><td>${st.scripts}</td><td>${chip(st.status)}</td><td style="color:var(--ink-2)">${esc(subLabel(st))}</td></tr>`; }).join('')}
@@ -619,7 +608,7 @@ function renderDb() {
 
 function renderJfrog() {
   const cols = ['Installer', 'Docker image', 'DB bundle', 'Checksums'];
-  const rows = [['26.4.0', '26.4:jfrog'], ['26.3.2', 'hf:26.3.2'], ['26.3.1', 'hf:26.3.1'], ['26.3.0', '26.3:jfrog'], ['26.2.3', 'hf:26.2.3']];
+  const rows = [['26.4.0', '26.4:jfrog'], ['26.3.2', 'hf:26.3.2'], ['26.3.1', 'hf:26.3.1'], ['26.3.0', '26.3:jfrog']];
   const cell = (st, col) => {
     const sub = st.subs.find(s => s.t.startsWith(col));
     if (sub.done) return `<span class="chip">${icon('done', 15)}published</span>`;
