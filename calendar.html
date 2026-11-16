@@ -31,7 +31,7 @@
   --good: #19b219; --warn: #fab219; --warn-edge: #fab219; --crit: #e55a5a;
 }
 * { box-sizing: border-box; }
-html { scrollbar-color: var(--rule) transparent; }
+html { scrollbar-color: var(--rule) transparent; scrollbar-gutter: stable; }
 body { margin: 0; background: var(--page); color: var(--ink); font: 14.5px/1.5 var(--body); }
 ::selection { background: var(--accent); color: #fff; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
@@ -98,7 +98,7 @@ svg text.now { fill: var(--accent); font-weight: 600; }
 .dh p { margin: 0; color: var(--ink2); flex: 1 1 340px; max-width: 80ch; }
 .dh .cnt { margin-left: auto; font-family: var(--din); font-size: 17px; color: var(--ink2); font-variant-numeric: tabular-nums; }
 .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; align-items: start; }
-@media (max-width: 960px) { .cols { grid-template-columns: minmax(0, 1fr); gap: 28px; } .tl { grid-template-columns: 112px minmax(0, 1fr); } .in { padding: 0 16px; } }
+@media (max-width: 960px) { .cols { grid-template-columns: minmax(0, 1fr); gap: 28px; } .tl { grid-template-columns: 136px minmax(0, 1fr); } .in { padding-left: 16px; padding-right: 16px; } }
 .col h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: var(--din); font-size: 18px; font-weight: 600; margin: 0; padding-bottom: 7px; border-bottom: 2px solid var(--ink); }
 .col h3 small { font-family: var(--body); font-size: 12.5px; font-weight: 400; color: var(--ink2); }
 .col h3.after { margin-top: 26px; border-bottom-width: 1px; border-bottom-color: var(--rule); font-size: 15px; }
@@ -522,7 +522,7 @@ function renderDetail() {
 function renderAll() {
   const k = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
   if (!rows().some(r => r.id === sel && !r.plain)) sel = 'master';
-  renderBrief(); renderTimeline(); renderDetail();
+  renderBrief(); renderDetail(); renderTimeline();   // timeline last: it measures its width once the page height is settled
   const again = k && document.querySelector(`[data-k="${k}"]`);
   if (again) again.focus({ preventScroll: true });
 }
