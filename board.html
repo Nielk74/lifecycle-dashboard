@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release Board — Software Lifecycle</title>
+<script>
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('lc-theme'); } catch (e) {}
+  if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+})();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f3f3ef; --surface: #ffffff; --well: #f3f3ef;
+  --ink: #14171a; --ink2: #474d56; --ink3: #6a717c; --rule: #dbdbd4;
+  --ok: #0a8f0a; --accent: #1b66c9;
+  --warn: #fab219; --warn-tx: #7d4e00; --warn-bg: #fdefc9;
+  --bad: #d03b3b; --bad-tx: #9f1d1d; --bad-bg: #fbe1df;
+  --disp: "Segoe UI Variable Display", "Segoe UI", -apple-system, system-ui, sans-serif;
+  --text: "Segoe UI Variable Text", "Segoe UI", -apple-system, system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0f1012; --surface: #17191c; --well: #0f1012;
+  --ink: #eceef1; --ink2: #b6bcc6; --ink3: #8c94a1; --rule: #2c3038;
+  --ok: #1cb41c; --accent: #5aa5f5;
+  --warn: #fab219; --warn-tx: #fbc44a; --warn-bg: #382c0b;
+  --bad: #e25555; --bad-tx: #ff9a9a; --bad-bg: #3b1919;
+}
+* { box-sizing: border-box; }
+html { scrollbar-color: var(--rule) transparent; scrollbar-gutter: stable; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14.5px/1.45 var(--text); }
+::selection { background: var(--accent); color: #fff; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+.ic { flex: none; }
+.in { max-width: 1440px; margin: 0 auto; padding-left: 28px; padding-right: 28px; }
+
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-top: 20px; }
+.top b { font-family: var(--disp); font-size: 16px; }
+.top b + span { color: var(--ink2); margin-left: 8px; }
+.util { display: flex; gap: 18px; flex-wrap: wrap; color: var(--ink3); font-size: 13px; }
+.util button { color: var(--ink2); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+.util button:hover { color: var(--ink); }
+
+/* ---- the release being prepared: big stepper ---- */
+.hero { padding-top: 30px; padding-bottom: 34px; }
+.hh { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; margin-bottom: 26px; }
+.hh h1 { font-family: var(--disp); font-size: 40px; line-height: 1; font-weight: 700; letter-spacing: -.025em; margin: 0; }
+.hh p { margin: 0; font-size: 17px; color: var(--ink2); }
+.hh p b { color: var(--ink); font-weight: 600; }
+.hh .cnt { margin-left: auto; font-size: 15px; color: var(--ink2); }
+.phases { display: grid; grid-template-columns: 4fr 4fr 2fr; margin-bottom: 14px; }
+.phases span { margin: 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--rule); font-family: var(--disp); font-weight: 600; font-size: 15px; color: var(--ink2); text-align: center; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); }
+.step { position: relative; }
+.step::before { content: ""; position: absolute; top: 24px; left: -50%; width: 100%; height: 4px; background: var(--rule); }
+.step:first-child::before { display: none; }
+.step.reached::before { background: var(--ink); }
+.step button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; padding: 0 4px 10px; text-align: center; border-radius: 10px; }
+.ball { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--page); border: 3px solid var(--ink3); margin-bottom: 8px; font-family: var(--disp); font-weight: 700; font-size: 16px; transition: transform .12s ease-out; }
+.step button:hover .ball { transform: scale(1.07); }
+.step.done .ball { background: var(--ok); border-color: var(--ok); }
+.step.progress .ball { background: var(--warn); border-color: var(--warn); color: #1a1300; }
+.step.blocked .ball { background: var(--bad); border-color: var(--bad); }
+.step.open .ball { box-shadow: 0 0 0 4px var(--page), 0 0 0 7px var(--ink); }
+.sn { font-weight: 600; font-size: 15px; line-height: 1.25; }
+.se { font-size: 13px; color: var(--ink2); line-height: 1.3; }
+.step.blocked .se { color: var(--bad-tx); font-weight: 600; }
+.step.late .se { color: var(--warn-tx); font-weight: 600; }
+.panel { position: relative; margin-top: 12px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 40px; }
+.panel::before { content: ""; position: absolute; top: -8px; left: calc((var(--i) + .5) * 10% - 8px); width: 15px; height: 15px; background: var(--surface); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule); transform: rotate(45deg); }
+.panel h3 { font-family: var(--disp); font-size: 20px; margin: 0 0 6px; }
+.panel p { margin: 0 0 12px; max-width: 62ch; }
+dl { display: grid; grid-template-columns: 62px 1fr; gap: 3px 10px; margin: 0; font-size: 13px; }
+dt { color: var(--ink3); }
+dd { margin: 0; overflow-wrap: anywhere; color: var(--ink2); }
+.chk label { display: flex; gap: 10px; align-items: flex-start; padding: 5px 0; cursor: pointer; overflow-wrap: anywhere; }
+.chk input { accent-color: var(--ok); width: 18px; height: 18px; margin: 1px 0 0; flex: none; }
+.chk .dn { color: var(--ink3); }
+.set { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.set button { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 8px; font-size: 13px; color: var(--ink2); box-shadow: inset 0 0 0 1px var(--rule); }
+.set button[aria-pressed="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 2px var(--ink); }
+.file { margin: 0 0 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--ink2); overflow-x: auto; }
+.file div { display: flex; gap: 10px; white-space: nowrap; align-items: center; }
+.file i { font-style: normal; color: var(--ink3); width: 20px; text-align: right; flex: none; }
+.file .missing { color: var(--bad-tx); font-weight: 700; }
+
+/* ---- the board: one column per version, same rows everywhere ---- */
+.board { display: grid; grid-template-columns: 124px repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(6, auto); background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; margin-bottom: 70px; }
+.gut, .vcol { display: grid; grid-template-rows: subgrid; grid-row: 1 / -1; }
+.vcol { border-left: 1px solid var(--rule); min-width: 0; }
+.cell { padding: 14px 18px 16px; border-top: 1px solid var(--rule); min-width: 0; }
+.cell:first-child { border-top: 0; }
+.gut .cell { padding: 22px 0 0 20px; font-family: var(--disp); font-weight: 600; font-size: 16px; }
+.gut small { display: block; font-family: var(--text); font-weight: 400; font-size: 12.5px; color: var(--ink3); }
+.vh { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 18px; padding-bottom: 18px; }
+.vh h2 { font-family: var(--disp); font-size: 30px; line-height: 1.05; font-weight: 700; letter-spacing: -.02em; margin: 0; }
+.vh p { margin: 3px 0 0; color: var(--ink2); }
+.sum { display: flex; align-items: center; gap: 8px; padding: 7px 12px 7px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; background: var(--well); }
+.sum.bad { background: var(--bad-bg); color: var(--bad-tx); }
+.sum.warn { background: var(--warn-bg); color: var(--warn-tx); }
+.r { display: flex; gap: 11px; align-items: flex-start; width: calc(100% + 16px); margin: 0 -8px; padding: 7px 8px; border-radius: 9px; }
+.r + .r { margin-top: 1px; }
+button.r:hover { box-shadow: inset 0 0 0 1.5px currentColor; }
+.rt { flex: 1; min-width: 0; }
+.rt b { display: block; font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.rt b.mono { font-size: 13.5px; }
+.rt span { display: block; font-size: 13px; color: var(--ink2); overflow-wrap: anywhere; }
+.r.bad { background: var(--bad-bg); }
+.r.bad b, .r.bad span { color: var(--bad-tx); }
+.r.warn, .r.miss { background: var(--warn-bg); }
+.r.warn b, .r.warn span, .r.miss b, .r.miss span { color: var(--warn-tx); }
+.r.todo b { font-weight: 500; color: var(--ink2); }
+.hist { display: flex; gap: 2px; align-items: flex-end; height: 20px; margin-top: 2px; flex: none; }
+.hist i { width: 5px; height: 12px; border-radius: 1.5px; background: var(--ink3); opacity: .38; }
+.hist i.f { height: 20px; background: var(--bad); opacity: 1; }
+.ver { margin: 0 0 6px; color: var(--ink2); font-size: 13px; }
+.ver code { color: var(--ink); font-size: 13.5px; font-weight: 600; }
+.more { margin: 8px 0 0; font-size: 13px; color: var(--ink3); }
+.inl { padding: 6px 0 4px 33px; }
+.envs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.env { padding: 11px 13px 12px; border-radius: 11px; background: var(--well); min-width: 0; }
+.env b { display: block; font-family: var(--disp); font-size: 17px; font-weight: 700; letter-spacing: .03em; }
+.env code { display: block; font-weight: 600; margin: 2px 0; overflow-wrap: anywhere; }
+.env span { display: block; font-size: 12.5px; color: var(--ink2); }
+.env.none { background: none; border: 2px dashed var(--rule); color: var(--ink2); grid-column: 1 / -1; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+@media (max-width: 1020px) {
+  .in { padding-left: 16px; padding-right: 16px; }
+  .phases { display: none; }
+  .steps { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .step::before { display: none; }
+  .step button { flex-direction: row; text-align: left; gap: 14px; padding: 6px; }
+  .ball { margin: 0; width: 44px; height: 44px; }
+  .sn { flex: 1; }
+  .panel { grid-template-columns: minmax(0, 1fr); }
+  .panel::before { display: none; }
+  .board { display: block; }
+  .gut { display: none; }
+  .vcol { display: block; border-left: 0; border-top: 6px solid var(--page); }
+  .vcol:first-of-type { border-top: 0; }
+  .cell[data-l]::before { content: attr(data-l); display: block; font-family: var(--disp); font-weight: 600; margin-bottom: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .ball { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="in top">
+  <div><b>Lifecycle</b><span>Orion Suite, mock data</span></div>
+  <div class="util">
+    <span>Bitbucket, TeamCity and JFrog synced at 10:24</span>
+    <button id="reset" title="Discard the changes you made in this browser">Reset</button>
+    <button id="theme">Light / dark</button>
+  </div>
+</header>
+
+<section class="in hero" id="hero"></section>
+<section class="in"><div class="board" id="board"></div></section>
+
+<script>
+/* ============================================================
+   MOCK DATA. Replace this block with real Bitbucket / TeamCity /
+   JFrog / deployment data later; the rendering below only reads
+   G (the checkable steps) and the plain objects in this block.
+   ============================================================ */
+const TODAY = '2026-11-16';
+const day = s => new Date(s + 'T12:00:00');
+const diff = (a, b) => Math.round((day(a) - day(b)) / 864e5);
+const fmt = s => day(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const days = n => `${n} day${n === 1 ? '' : 's'}`;
+const when = s => { const n = diff(s, TODAY); return n === 0 ? 'today' : n > 0 ? `in ${days(n)}` : `${days(-n)} ago`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const PREP = '26.4', LIVE = '26.3', NEXT = { v: '27.1', cut: '2027-02-15' };
+const STATUS = { todo: 'Not started', progress: 'In progress', done: 'Done', blocked: 'Blocked' };
+const JOBS = ['Build', 'Unit tests', 'Integration tests', 'Packaging', 'Nightly regression'];
+const ARTIFACTS = ['Installer', 'Docker image', 'DB bundle', 'Checksums and SBOM'];
+
+/* Checkable steps, by id. Board rows read their state from here, so ticking a
+   box in a checklist changes the matching row on the board. */
+const G = {};
+function gate(id, o) {
+  G[id] = { id, ...o, subs: o.subs.map((t, i) => ({ t, done: o.mask ? !!o.mask[i] : o.status === 'done' })) };
+}
+const N = PREP.replace('.', '');
+[ // key, short name, full title, owner, status, date, checklist, extra
+  ['cut', 'Branch created', `Create branch release/${PREP}`, 'Camille R.', 'done', '2026-11-09',
+    [`release/${PREP} created from master`, 'Branch permissions applied', 'Default reviewers and merge checks set'],
+    { src: `bitbucket.example.com/orion/suite/branch/release/${PREP}`, note: 'Cut from master at a91f3c2.' }],
+  ['tc', 'TeamCity jobs', 'Duplicate the TeamCity jobs', 'Hugo B.', 'progress', '2026-11-12',
+    [`VCS root points at release/${PREP}`, ...JOBS.map(j => `Job "${j}" created (Orion_${N}_${j.replace(/ /g, '')})`)],
+    { mask: [1, 1, 1, 1, 0, 0], src: `teamcity.example.com/project/Orion_Release${N}`,
+      note: 'Packaging and Nightly regression still have to be copied from the master templates. Until Packaging exists, nothing can be published to JFrog or deployed.' }],
+  ['bump', 'Version bump', 'Bump versions', 'Camille R.', 'done', '2026-11-09',
+    ['master moved to 27.1.0-SNAPSHOT', `release/${PREP} pinned to ${PREP}.0`, 'Changelog section opened'],
+    { src: 'bitbucket.example.com/orion/suite/commits' }],
+  ['head', 'head.txt', `releases/${PREP}/head.txt`, 'Inès D.', 'blocked', '2026-11-10',
+    [`releases/${PREP}/head.txt created`, 'Every listed script exists in the repo', 'Execution order reviewed by the DBA'],
+    { mask: [1, 0, 0], why: '1 script missing', file: true, src: `bitbucket.example.com/orion/db-scripts/releases/${PREP}/head.txt`,
+      note: 'head.txt lists 0444_add_audit_index.sql, but that script is not in the repo yet. db-scripts PR #77 is still open.' }],
+  ['dbrun', 'DB dry-run', 'DB upgrade dry-run', 'Inès D.', 'todo', '2026-11-20',
+    ['Fresh install from head.txt', `Upgrade from ${LIVE}`, 'Rollback scripts checked'],
+    { src: 'teamcity.example.com/buildConfiguration/Orion_DbDryRun', note: 'Needs a complete head.txt first.' }],
+  ['freeze', 'Code freeze', 'Code freeze', 'Camille R.', 'todo', '2026-11-23',
+    [`release/${PREP} restricted to release managers`, 'Freeze announced to the teams'],
+    { src: 'bitbucket.example.com/orion/suite/settings/branch-permissions' }],
+  ['rc', 'RC build', 'Release-candidate build', 'Hugo B.', 'todo', '2026-11-25',
+    ['Build green on the release branch', 'Integration suite green', 'RC tagged and deployed to QA'],
+    { src: `teamcity.example.com/buildConfiguration/Orion_${N}_Build` }],
+  ['qa', 'QA sign-off', 'QA sign-off', 'Sofia K.', 'todo', '2026-12-04',
+    ['Regression campaign', 'Performance baseline', 'Sign-off recorded'], { src: `qa.example.com/campaigns/orion-${PREP}` }],
+  ['jfrog', 'JFrog package', 'Package on JFrog', 'Lucas M.', 'todo', '2026-12-09',
+    ARTIFACTS.map(a => `${a} published`), { src: `jfrog.example.com/artifactory/orion-release-local/${PREP}.0/` }],
+  ['ga', 'GA', 'General availability', 'Camille R.', 'todo', '2026-12-14',
+    ['Tag created', 'Release notes published', 'Deployed to PROD'], { src: `bitbucket.example.com/orion/suite/tags/v${PREP}.0` }],
+].forEach(([key, short, title, owner, status, date, subs, x], i) => gate(`s:${key}`, { i, short, title, owner, status, date, subs, ...x }));
+const STEPS = Object.values(G);
+
+gate('hf', { title: 'Hotfix 26.3.2', owner: 'Lucas M.', status: 'progress', date: '2026-11-13', mask: [1, 1, 1, 0, 1, 0, 0],
+  subs: ['Fix merged to release/26.3', 'Build green', ...ARTIFACTS.map(a => `${a} published`), 'Tag created'],
+  src: 'jfrog.example.com/artifactory/orion-release-local/26.3.2/', note: 'The Docker image push failed: storage quota reached on orion-docker-local.' });
+
+const HEAD_TAIL = ['0439_view_open_orders.sql', '0440_alter_export_job.sql', '0441_seed_feature_flags.sql', '0442_idx_orders_created.sql', '0443_grant_reporting_role.sql', '0444_add_audit_index.sql'];
+
+/* Static facts per version: last run of each TeamCity job (+ outcome of the last runs,
+   oldest first: p = passed, f = failed) and what each environment is running. */
+const RUNS = {
+  master: [['#4812, 3 min', 'pppppppppp'], ['6 412 passed, 5 min', 'pppfpppppp'], ['318 passed, 4 min', 'pppppppppp'], ['#4812, 2 min', 'ppfppppppp'], ['Last night, 1 204 passed', 'pppppppppp']],
+  [PREP]: [['#37, 3 min', 'ppp'], ['6 398 passed, 5 min', 'ppp'], ['318 passed, 4 min', 'ppp'], null, null],
+  [LIVE]: [['#212, 3 min', 'pppppppppp'], ['6 371 passed, 5 min', 'pppppppppp'], ['311 passed, 4 min', 'pppppppppp'], ['#212, 2 min', 'pppppppppp'], ['Last night, 1 187 passed', 'ppppppfppp']],
+};
+const ENVS = {
+  master: [['DEV', '27.1.0-SNAPSHOT.4812', 'Deployed today at 10:20, after every green build'], ['INT', '27.1.0-SNAPSHOT.4806', 'Deployed last night at 02:00']],
+  [PREP]: [],
+  [LIVE]: [['QA', '26.3.2-rc1', 'Hotfix under validation since 13 Nov'], ['PREPROD', '26.3.1', 'Since 26 Oct'], ['PROD', '26.3.1', 'Since 27 Oct']],
+};
+
+/* ============================================================
+   STATE. Edits are kept in this browser only.
+   ============================================================ */
+const KEY = 'lc-board-v1';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+Object.entries(saved).forEach(([id, o]) => { if (G[id]) { G[id].status = o.status; G[id].subs.forEach((s, i) => { s.done = !!o.subs[i]; }); } });
+function persist(g) {
+  saved[g.id] = { status: g.status, subs: g.subs.map(s => s.done) };
+  try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+}
+let openGate = null;
+const nDone = g => g.subs.filter(s => s.done).length;
+const late = g => g.status !== 'done' && g.date ? Math.max(0, diff(TODAY, g.date)) : 0;
+function evidence(g) {
+  const l = late(g);
+  if (g.status === 'done') return fmt(g.date);
+  if (g.status === 'blocked') return g.why || 'Blocked';
+  if (g.status === 'progress') return `${nDone(g)} of ${g.subs.length}${l ? `, ${days(l)} late` : ''}`;
+  return l ? `${days(l)} late` : fmt(g.date);
+}
+
+/* ============================================================
+   RENDERING
+   ============================================================ */
+function icon(k, size = 24) {
+  const body = {
+    ok: `<circle r="10.4" fill="var(--ok)"/><path d="M-4.7 .3 L-1.5 3.5 L4.9 -3.3" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+    prog: `<circle r="9" fill="none" stroke="var(--warn-tx)" stroke-width="2.4"/><path d="M0 -9 A9 9 0 0 1 0 9 Z" fill="var(--warn-tx)"/>`,
+    warn: `<path d="M0 -9.4 L10.2 8.2 H-10.2 Z" fill="var(--warn)" stroke="var(--warn)" stroke-width="2.4" stroke-linejoin="round"/><path d="M0 -3.6 V2.2" stroke="#1a1300" stroke-width="2.5" stroke-linecap="round"/><circle cy="5.7" r="1.5" fill="#1a1300"/>`,
+    bad: `<path d="M0 -11 L11 0 L0 11 L-11 0 Z" fill="var(--bad)"/><path d="M-3.5 -3.5 L3.5 3.5 M3.5 -3.5 L-3.5 3.5" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>`,
+    todo: `<circle r="9" fill="none" stroke="var(--ink3)" stroke-width="2.4"/>`,
+    miss: `<circle r="9" fill="none" stroke="var(--warn-tx)" stroke-width="2.4" stroke-dasharray="3.6 3.47"/><path d="M0 -4 V4 M-4 0 H4" stroke="var(--warn-tx)" stroke-width="2.4" stroke-linecap="round"/>`,
+  }[k];
+  return `<svg class="ic" width="${size}" height="${size}" viewBox="-12 -12 24 24" aria-hidden="true">${body}</svg>`;
+}
+const WORD = { ok: 'OK', prog: 'In progress', warn: 'Needs attention', bad: 'Failing', todo: 'Not yet', miss: 'Missing' };
+const gk = g => ({ done: 'ok', progress: 'prog', blocked: 'bad', todo: 'todo' }[g.status]);
+
+/* One board row: { k: icon kind, t: title, d: detail, hist, gate: id of the step it opens, mono } */
+function row(o) {
+  const hist = o.hist ? `<span class="hist" title="Last ${o.hist.length} runs, oldest first">${[...o.hist].map(c => `<i class="${c}"></i>`).join('')}</span>` : '';
+  const inner = `${icon(o.k)}<span class="rt"><b class="${o.mono ? 'mono' : ''}">${esc(o.t)}</b><span><span class="sr">${WORD[o.k]}. </span>${esc(o.d)}</span></span>${hist}`;
+  const cls = `r ${['bad', 'warn', 'miss', 'todo'].includes(o.k) ? o.k : ''}`;
+  return o.gate ? `<button class="${cls}" data-gate="${o.gate}" data-k="b-${o.gate}-${esc(o.t)}">${inner}</button>` : `<div class="${cls}">${inner}</div>`;
+}
+
+function checklist(g) {
+  return `<div class="chk">${g.subs.map((s, i) => `<label><input type="checkbox" data-sub="${i}" data-k="c-${g.id}-${i}" ${s.done ? 'checked' : ''}><span class="${s.done ? 'dn' : ''}">${esc(s.t)}</span></label>`).join('')}</div>
+    <div class="set" role="group" aria-label="Status">${Object.keys(STATUS).map(k =>
+      `<button data-set="${k}" data-k="set-${k}" aria-pressed="${g.status === k}">${icon({ done: 'ok', progress: 'prog', blocked: 'bad', todo: 'todo' }[k], 16)}${STATUS[k]}</button>`).join('')}</div>`;
+}
+function fileHtml(g) {
+  const ok = g.subs[1].done;
+  return `<div class="file" aria-label="Last lines of head.txt">` + HEAD_TAIL.map((f, i) => {
+    const miss = !ok && i === HEAD_TAIL.length - 1;
+    return `<div><i>${39 + i}</i><span class="${miss ? 'missing' : ''}">${f}${miss ? '  ← not in the repo' : ''}</span></div>`;
+  }).join('') + `</div>`;
+}
+
+function renderHero() {
+  const fr = G['s:freeze'], ga = G['s:ga'], done = STEPS.filter(g => g.status === 'done').length;
+  const line = ga.status === 'done' ? `Shipped on <b>${fmt(ga.date)}</b>.`
+    : (fr.status === 'done' ? 'Code is frozen. ' : `Code freeze <b>${when(fr.date)}</b>, on ${fmt(fr.date)}. `) + `GA <b>${when(ga.date)}</b>, on ${fmt(ga.date)}.`;
+  let last = -1;
+  STEPS.forEach((g, i) => { if (g.status !== 'todo') last = i; });
+  const ball = g => g.status === 'done' ? `<svg width="26" height="26" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M-6 .4 L-2 4.6 L6.4 -4.4" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+    : g.status === 'progress' ? `${nDone(g)}/${g.subs.length}`
+    : g.status === 'blocked' ? `<svg width="26" height="26" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M-5 -5 L5 5 M5 -5 L-5 5" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>` : '';
+  const open = STEPS.find(g => g.id === openGate);
+  document.getElementById('hero').innerHTML = `
+    <div class="hh"><h1>Release ${PREP}</h1><p>${line}</p><span class="cnt">${done} of ${STEPS.length} steps done</span></div>
+    <div class="phases" aria-hidden="true"><span>Branch</span><span>Stabilise</span><span>Ship</span></div>
+    <ol class="steps">${STEPS.map((g, i) => `<li class="step ${g.status}${i <= last ? ' reached' : ''}${late(g) && g.status !== 'blocked' ? ' late' : ''}${g.id === openGate ? ' open' : ''}">
+      <button data-gate="${g.id}" data-k="st-${g.id}" aria-expanded="${g.id === openGate}">
+        <span class="ball">${ball(g)}</span><span class="sn">${esc(g.short)}</span><span class="se"><span class="sr">${STATUS[g.status]}. </span>${esc(evidence(g))}</span></button></li>`).join('')}</ol>
+    ${open ? `<div class="panel" id="panel" style="--i:${open.i}">
+      <div><h3>${esc(open.title)}</h3>${open.note ? `<p>${esc(open.note)}</p>` : ''}${open.file ? fileHtml(open) : ''}
+        <dl><dt>${open.status === 'done' ? 'Done' : 'Due'}</dt><dd>${fmt(open.date)}${open.status === 'done' ? '' : ', ' + when(open.date)}</dd><dt>Owner</dt><dd>${esc(open.owner)}</dd><dt>Source</dt><dd class="mono">${esc(open.src)}</dd></dl></div>
+      <div>${checklist(open)}</div></div>` : ''}`;
+}
+
+/* What each column shows, section by section. */
+function cells(v) {
+  if (v === 'master') return {
+    name: 'master', sub: `Development. ${NEXT.v} is cut ${when(NEXT.cut)}, on ${fmt(NEXT.cut)}.`,
+    code: [{ k: 'ok', t: 'HEAD e41c9a7', d: '"Tune export batch size", Inès D., today 10:02' },
+      { k: 'prog', t: 'feature/sso-okta', mono: true, d: 'In review for 9 days, waiting for the security review' },
+      { k: 'bad', t: 'fix/export-timeout', mono: true, d: 'Build failing on PR #491: 3 integration tests red' }],
+    codeMore: 'Merged this week: feature/audit-log, fix/import-npe.',
+    tc: JOBS.map((j, i) => ({ k: 'ok', t: j, d: RUNS.master[i][0], hist: RUNS.master[i][1] })),
+    db: [{ k: 'ok', t: 'head.txt', mono: true, d: `14 scripts queued for ${NEXT.v}, all present` }, { k: 'ok', t: 'Nightly run on the DEV database', d: 'Green last night' }],
+    ver: ['27.1.0-SNAPSHOT.4812', 'orion-snapshot-local'],
+    jf: ARTIFACTS.map(a => ({ k: 'ok', t: a, d: 'Published today at 10:16' })),
+  };
+  if (v === PREP) {
+    const tc = G['s:tc'], head = G['s:head'], dr = G['s:dbrun'], jf = G['s:jfrog'], cut = G['s:cut'], bump = G['s:bump'];
+    const pack = tc.subs[4].done;
+    return {
+      name: PREP, sub: `Being prepared. ${STEPS.filter(g => g.status === 'done').length} of ${STEPS.length} steps done.`,
+      code: [{ k: gk(cut), t: `release/${PREP}`, mono: true, d: cut.status === 'done' ? `Cut ${fmt(cut.date)} from a91f3c2, 3 commits since` : 'Branch not ready yet', gate: cut.id },
+        { k: gk(bump), t: 'Version', d: bump.status === 'done' ? `Pinned to ${PREP}.0` : 'Not bumped yet', gate: bump.id }],
+      tc: JOBS.map((j, i) => {
+        const run = RUNS[PREP][i];
+        if (!tc.subs[i + 1].done) return { k: 'miss', t: j, d: `Job not created yet${late(tc) ? `, ${days(late(tc))} late` : ''}`, gate: tc.id };
+        return run ? { k: 'ok', t: j, d: run[0], hist: run[1], gate: tc.id } : { k: 'todo', t: j, d: 'Created, no run yet', gate: tc.id };
+      }),
+      db: [{ k: gk(head), t: `releases/${PREP}/head.txt`, mono: true, gate: head.id,
+          d: head.status === 'done' ? '44 scripts, all present' : head.subs[1].done ? '44 scripts, waiting for the DBA review' : '44 listed, 1 not in the repo: 0444_add_audit_index.sql' },
+        { k: gk(dr), t: 'Upgrade dry-run', d: dr.status === 'done' ? `Passed ${fmt(dr.date)}` : `Due ${fmt(dr.date)}${head.status === 'done' ? '' : ', needs head.txt first'}`, gate: dr.id }],
+      ver: [`${PREP}.0`, 'orion-release-local'],
+      jf: ARTIFACTS.map((a, i) => jf.subs[i].done ? { k: 'ok', t: a, d: 'Published', gate: jf.id }
+        : { k: 'todo', t: a, d: pack ? 'Not published yet' : 'Waiting for the Packaging job', gate: jf.id }),
+      noEnv: `No environment runs ${PREP} yet. QA takes it as soon as a package exists.`,
+    };
+  }
+  const hf = G.hf, art = i => hf.subs[i + 2].done;
+  return {
+    name: LIVE, sub: hf.status === 'done' ? 'Live since 28 Sep. Hotfix 26.3.2 is out.' : 'Live since 28 Sep. Hotfix 26.3.2 under way.',
+    code: [{ k: 'ok', t: `release/${LIVE}`, mono: true, d: 'Last commit 13 Nov, "Fix invoice rounding"' }, { k: 'ok', t: 'Version', d: 'Pinned to 26.3.2' }],
+    tc: JOBS.map((j, i) => ({ k: 'ok', t: j, d: RUNS[LIVE][i][0], hist: RUNS[LIVE][i][1] })),
+    db: [{ k: 'ok', t: `releases/${LIVE}/head.txt`, mono: true, d: '41 scripts, all present' }, { k: 'ok', t: 'Upgrade dry-run', d: 'Passed 26 Aug' }],
+    ver: ['26.3.2', 'orion-release-local'],
+    jf: ARTIFACTS.map((a, i) => art(i) ? { k: 'ok', t: a, d: 'Published 13 Nov', gate: 'hf' }
+      : i === 1 ? { k: 'bad', t: a, d: 'Push failed: storage quota reached on orion-docker-local', gate: 'hf' }
+      : { k: 'todo', t: a, d: art(1) ? 'Not published yet' : 'Waits for the Docker image', gate: 'hf' }),
+    jfMore: '26.3.1 is complete, published 26 Oct.', hot: true,
+  };
+}
+function renderBoard() {
+  const labels = [['Code', 'Bitbucket'], ['Build and test', 'TeamCity'], ['DB scripts', 'head.txt'], ['Package', 'JFrog'], ['Running on', 'Environments']];
+  const cols = ['master', PREP, LIVE].map(v => {
+    const c = cells(v), all = [...c.code, ...c.tc, ...c.db, ...c.jf];
+    const nb = all.filter(r => r.k === 'bad').length, nw = all.filter(r => r.k === 'warn' || r.k === 'miss').length;
+    const sum = nb + nw ? `<div class="sum ${nb ? 'bad' : 'warn'}">${icon(nb ? 'bad' : 'warn', 26)}${nb + nw} to fix</div>` : `<div class="sum">${icon('ok', 26)}All good</div>`;
+    const env = ENVS[v].length ? ENVS[v].map(([n, ver, d]) => `<div class="env"><b>${n}</b><code>${ver}</code><span>${d}</span></div>`).join('')
+      : `<div class="env none">${c.noEnv}</div>`;
+    const hot = c.hot && openGate === 'hf' ? `<div class="inl">${G.hf.note ? `<p style="margin:0 0 8px">${esc(G.hf.note)}</p>` : ''}${checklist(G.hf)}</div>` : '';
+    return `<article class="vcol" aria-label="${c.name}">
+      <header class="cell vh"><div><h2>${c.name}</h2><p>${c.sub}</p></div>${sum}</header>
+      <div class="cell" data-l="Code">${c.code.map(row).join('')}${c.codeMore ? `<p class="more">${c.codeMore}</p>` : ''}</div>
+      <div class="cell" data-l="Build and test">${c.tc.map(row).join('')}</div>
+      <div class="cell" data-l="DB scripts">${c.db.map(row).join('')}</div>
+      <div class="cell" data-l="Package"><p class="ver"><code>${c.ver[0]}</code> in ${c.ver[1]}</p>${c.jf.map(row).join('')}
+        ${c.hot ? row({ k: gk(G.hf), t: 'Hotfix 26.3.2 checklist', d: evidence(G.hf), gate: 'hf' }) + hot : ''}${c.jfMore ? `<p class="more">${c.jfMore}</p>` : ''}</div>
+      <div class="cell" data-l="Running on"><div class="envs">${env}</div></div>
+    </article>`;
+  });
+  document.getElementById('board').innerHTML = `<div class="gut" aria-hidden="true"><div class="cell"></div>${labels.map(([a, b]) => `<div class="cell">${a}<small>${b}</small></div>`).join('')}</div>` + cols.join('');
+}
+function renderAll() {
+  const k = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
+  renderHero(); renderBoard();
+  const again = k && document.querySelector(`[data-k="${CSS.escape(k)}"]`);
+  if (again) again.focus({ preventScroll: true });
+}
+
+/* ============================================================
+   INTERACTION
+   ============================================================ */
+document.addEventListener('click', e => {
+  const t = e.target;
+  const set = t.closest('[data-set]');
+  if (set) {
+    const g = G[openGate];
+    g.status = set.dataset.set;
+    if (g.status === 'done') g.subs.forEach(s => { s.done = true; });
+    if (g.status === 'todo') g.subs.forEach(s => { s.done = false; });
+    persist(g); return renderAll();
+  }
+  const gt = t.closest('[data-gate]');
+  if (gt) {
+    const id = gt.dataset.gate, fromBoard = !!gt.closest('.board') && id !== 'hf';
+    openGate = openGate === id && !fromBoard ? null : id;
+    renderAll();
+    const p = document.getElementById('panel');
+    if (fromBoard && p) p.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    return;
+  }
+  if (t.closest('#theme')) {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('lc-theme', next); } catch (err) {}
+  }
+  if (t.closest('#reset')) { try { localStorage.removeItem(KEY); } catch (err) {} location.reload(); }
+});
+document.addEventListener('change', e => {
+  if (!e.target.matches('[data-sub]')) return;
+  const g = G[openGate];
+  g.subs[+e.target.dataset.sub].done = e.target.checked;
+  const n = nDone(g);
+  g.status = n === g.subs.length ? 'done' : g.status === 'blocked' ? 'blocked' : n ? 'progress' : 'todo';
+  persist(g); renderAll();
+});
+renderAll();
+</script>
+</body>
+</html>
