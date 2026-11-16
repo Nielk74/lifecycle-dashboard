@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release Lines — Software Lifecycle</title>
+<script>
+(function () {
+  var t = null;
+  try { t = localStorage.getItem('lc-theme'); } catch (e) {}
+  if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.dataset.theme = t;
+})();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  --plane: #f4f4f1; --surface: #fcfcfb; --surface-2: #f0efeb;
+  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --border: rgba(11,11,11,.10); --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+  /* line identity (categorical) */
+  --l-master: #2a78d6; --l-db: #1baf7a; --l-r1: #eb6834; --l-r2: #6250d6; --l-r3: #e87ba4;
+  /* status (reserved) */
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0d0d0d; --surface: #1a1a19; --surface-2: #242422;
+  --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --border: rgba(255,255,255,.10); --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.35);
+  --l-master: #3987e5; --l-db: #199e70; --l-r1: #d95926; --l-r2: #9085e9; --l-r3: #d55181;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--plane); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .92em; }
+.wrap { max-width: 1640px; margin: 0 auto; padding: 18px 24px 64px; }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand h1 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+.brand p { margin: 0; color: var(--ink-2); font-size: 12.5px; }
+.tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.src { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+.btn { font: inherit; font-size: 12.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; cursor: pointer; }
+.btn:hover { background: var(--surface-2); }
+.badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border); }
+
+/* cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; }
+.hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px 0; }
+.hd h2 { font-size: 14px; margin: 0; font-weight: 650; }
+.hd .sub { color: var(--ink-2); font-size: 12.5px; }
+.bd { padding: 12px 16px 16px; }
+.row { display: grid; gap: 14px; margin-top: 14px; }
+.row.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.row.onetwo { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+@media (max-width: 980px) { .row.two, .row.onetwo { grid-template-columns: minmax(0, 1fr); } }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.kpi { padding: 14px 16px; }
+.kpi .l { font-size: 12.5px; color: var(--ink-2); }
+.kpi .v { font-size: 26px; font-weight: 650; letter-spacing: -.02em; margin: 2px 0; display: flex; align-items: center; gap: 8px; }
+.kpi .h { font-size: 12.5px; color: var(--ink-2); }
+
+/* status chip / line bullet */
+.ico { flex: none; vertical-align: -3px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
+.bullet { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--c); color: #fff; font-weight: 700; font-size: 12px; }
+
+/* map */
+.legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--ink-2); }
+.lines { display: flex; gap: 6px; flex-wrap: wrap; }
+.linebtn { font: inherit; font-size: 12.5px; display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); cursor: pointer; }
+.linebtn i { width: 18px; height: 6px; border-radius: 3px; background: var(--c); }
+.linebtn[aria-pressed="true"] { background: var(--surface-2); border-color: var(--ink); }
+.mapwrap { overflow-x: auto; margin-top: 10px; border-top: 1px solid var(--border); border-radius: 0 0 14px 14px;
+  background-image: radial-gradient(var(--grid) 1px, transparent 1.2px); background-size: 22px 22px; }
+.mapwrap svg { display: block; width: 100%; min-width: 1400px; height: auto; }
+.track { fill: none; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.track.m { stroke-width: 9; }
+.track.pending { opacity: .42; stroke-dasharray: 1 13; }
+.tail { fill: none; stroke-width: 3; stroke-linecap: round; opacity: .75; }
+.feat { fill: none; stroke: var(--ink-2); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: .6; }
+.walk { fill: none; stroke: var(--muted); stroke-width: 3; stroke-dasharray: .5 7; stroke-linecap: round; }
+.ghost { fill: none; stroke: var(--muted); stroke-width: 5; stroke-dasharray: 1 11; stroke-linecap: round; }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.nm { font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+.nm.sm { font-size: 10.5px; font-weight: 500; fill: var(--ink-2); }
+.sb { font-size: 11px; fill: var(--ink-2); }
+.fl { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 10.5px; fill: var(--ink-2); }
+.pilltx { font-size: 12.5px; font-weight: 700; fill: #fff; stroke: none; }
+.pill { cursor: pointer; }
+.ln { transition: opacity .2s; }
+.ln.dim { opacity: .13; }
+.st { cursor: pointer; outline: none; }
+.st .ring { fill: var(--surface); }
+.st:hover .ring, .st:focus-visible .ring, .pill:focus-visible rect { stroke: var(--ink); stroke-width: 2; }
+.st.is-open .ring { stroke: var(--ink); stroke-width: 2.5; }
+.pill { outline: none; }
+.pulse { fill: none; stroke: var(--warn); stroke-width: 2; animation: pulse 2.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.pulse.live { stroke: var(--l-master); }
+@keyframes pulse { from { transform: scale(1); opacity: .8; } to { transform: scale(2.3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: 0; } .drawer, .ln { transition: none !important; } }
+
+/* lists & tables */
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 6px; border-top: 1px solid var(--border); cursor: pointer; border-radius: 6px; }
+.list li:first-child { border-top: 0; }
+.list li:hover { background: var(--surface-2); }
+.list .t { font-weight: 600; }
+.list .d { color: var(--ink-2); font-size: 12.5px; }
+.list .r { margin-left: auto; text-align: right; color: var(--ink-2); font-size: 12.5px; white-space: nowrap; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-size: 12px; font-weight: 500; color: var(--ink-2); padding: 6px 8px; }
+td { padding: 9px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--surface-2); }
+.empty { color: var(--ink-2); padding: 18px 6px; }
+
+/* readiness */
+.ready { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.rc { text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+.rc:hover, .rc[aria-pressed="true"] { background: var(--surface-2); }
+.rc[aria-pressed="true"] { border-color: var(--ink); }
+.rc .h1 { display: flex; align-items: center; gap: 8px; }
+.rc .ph { color: var(--ink-2); font-size: 12.5px; }
+.rc .cnt { margin-left: auto; font-weight: 650; font-variant-numeric: tabular-nums; }
+.strip { display: flex; align-items: center; margin: 12px 0 10px; position: relative; justify-content: space-between; }
+.strip::before { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; height: 3px; margin-top: -1.5px; border-radius: 2px; background: var(--c); opacity: .55; }
+.strip span { position: relative; display: flex; background: var(--surface); border-radius: 50%; }
+.rc:hover .strip span, .rc[aria-pressed="true"] .strip span { background: var(--surface-2); }
+.rc .nx { font-size: 12.5px; color: var(--ink-2); }
+.rc .nx b { color: var(--ink); font-weight: 600; }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: 62px repeat(18, minmax(0, 1fr)); gap: 3px; align-items: center; }
+.pipe .rl { font-size: 12px; color: var(--ink-2); }
+.cell { aspect-ratio: 1; max-height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+.cell.p { background: var(--good); }
+.cell.f { background: var(--crit); }
+.cell.s { border: 1.5px dashed var(--muted); }
+.pipe .ax { font-size: 11px; color: var(--ink-2); text-align: center; }
+.stats { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 14px; }
+.stats div b { display: block; font-size: 18px; font-weight: 650; }
+.stats div span { font-size: 12.5px; color: var(--ink-2); }
+.code { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; line-height: 1.7; overflow-x: auto; }
+.code div { display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.code .no { color: var(--muted); width: 18px; text-align: right; flex: none; }
+.code .miss { font-weight: 700; }
+.code .tag { margin-left: auto; font-family: system-ui, sans-serif; }
+
+/* drawer */
+.drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(430px, 100vw); background: var(--surface); border-left: 1px solid var(--border); box-shadow: -16px 0 40px rgba(0,0,0,.14); transform: translateX(105%); transition: transform .22s ease; z-index: 20; overflow-y: auto; padding: 18px 20px 28px; }
+.drawer.open { transform: none; }
+.drawer .x { position: absolute; top: 14px; right: 14px; }
+.drawer h3 { font-size: 19px; margin: 12px 0 2px; letter-spacing: -.01em; padding-right: 30px; }
+.drawer .where { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12.5px; }
+.seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 16px 0; }
+.seg button { font: inherit; font-size: 12.5px; color: var(--ink); display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface-2); border-color: var(--ink); font-weight: 600; }
+.meta { display: grid; grid-template-columns: 92px 1fr; gap: 7px 10px; margin: 0 0 14px; font-size: 13px; }
+.meta dt { color: var(--ink-2); }
+.meta dd { margin: 0; overflow-wrap: anywhere; }
+.note { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 16px; }
+.drawer h4 { font-size: 12.5px; color: var(--ink-2); font-weight: 500; margin: 0 0 6px; display: flex; justify-content: space-between; }
+.checks label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 4px; border-top: 1px solid var(--border); cursor: pointer; font-size: 13px; overflow-wrap: anywhere; }
+.checks label:first-of-type { border-top: 0; }
+.checks input { accent-color: var(--good); width: 16px; height: 16px; margin: 2px 0 0; flex: none; }
+.checks .dn { color: var(--ink-2); text-decoration: line-through; }
+.bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 0 0 8px; }
+.bar i { display: block; height: 100%; background: var(--good); border-radius: 3px; }
+.hint { color: var(--ink-2); font-size: 12px; margin-top: 16px; }
+
+#tip { position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: var(--surface); padding: 7px 10px; border-radius: 8px; font-size: 12.5px; max-width: 280px; box-shadow: 0 6px 20px rgba(0,0,0,.25); display: none; }
+#tip b { display: block; }
+#tip span { opacity: .8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true">
+        <rect width="38" height="38" rx="10" fill="var(--ink)"/>
+        <path d="M7 14 H31" stroke="var(--l-master)" stroke-width="4" stroke-linecap="round"/>
+        <path d="M14 14 L22 25 H31" stroke="var(--l-r1)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="14" cy="14" r="3.4" fill="var(--surface)"/><circle cx="26" cy="25" r="3.4" fill="var(--surface)"/>
+      </svg>
+      <div>
+        <h1>Release Lines <span class="badge">mock data</span></h1>
+        <p>Orion Suite · software lifecycle, from master to GA</p>
+      </div>
+    </div>
+    <div class="tools">
+      <span class="src" data-tip="Last sync 10:24 · 14 repositories"><svg class="ico" width="14" height="14" viewBox="-12 -12 24 24"><circle r="10" fill="var(--good)"/><path d="M-4.6 .4 L-1.4 3.6 L4.8 -3.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Bitbucket</span>
+      <span class="src" data-tip="Last sync 10:24 · 3 agents idle"><svg class="ico" width="14" height="14" viewBox="-12 -12 24 24"><circle r="10" fill="var(--good)"/><path d="M-4.6 .4 L-1.4 3.6 L4.8 -3.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>TeamCity</span>
+      <span class="src" data-tip="Last sync 10:21 · orion-release-local"><svg class="ico" width="14" height="14" viewBox="-12 -12 24 24"><circle r="10" fill="var(--good)"/><path d="M-4.6 .4 L-1.4 3.6 L4.8 -3.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>JFrog</span>
+      <span class="src">Mon 16 Nov 2026 · 10:24</span>
+      <button class="btn" id="reset" title="Discard the changes you made in this browser">Reset mock data</button>
+      <button class="btn" id="theme">Theme</button>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="card" style="margin-top:14px">
+    <div class="hd">
+      <div>
+        <h2>Network map</h2>
+        <div class="sub">Every station is a task — click one for details, tick its checklist, or set its status.</div>
+      </div>
+      <div class="lines" id="lines"></div>
+    </div>
+    <div class="hd" style="padding-top:10px"><div class="legend" id="legend"></div></div>
+    <div class="mapwrap" id="map"></div>
+  </section>
+
+  <div class="row onetwo">
+    <section class="card"><div class="hd"><h2>Needs attention</h2><span class="sub" id="attn-n"></span></div><div class="bd"><ul class="list" id="attn"></ul></div></section>
+    <section class="card"><div class="hd"><h2>Release readiness</h2><span class="sub">Click a release to isolate its line on the map</span></div><div class="bd"><div class="ready" id="ready"></div></div></section>
+  </div>
+
+  <div class="row two">
+    <section class="card"><div class="hd"><h2>master pipeline · TeamCity</h2><span class="sub">Last 18 commits, oldest → newest</span></div><div class="bd" id="pipe"></div></section>
+    <section class="card"><div class="hd"><h2>Feature &amp; fix branches · Bitbucket</h2><span class="sub">Targeting master</span></div><div class="bd"><ul class="list" id="branches"></ul></div></section>
+  </div>
+
+  <div class="row two">
+    <section class="card"><div class="hd"><h2>DB scripts · head.txt</h2><span class="sub">One head.txt per release, plus master</span></div><div class="bd" id="db"></div></section>
+    <section class="card"><div class="hd"><h2>Packaging · JFrog Artifactory</h2><span class="sub">Is every artifact where it should be?</span></div><div class="bd" id="jfrog"></div></section>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer" role="dialog" aria-label="Station details"></aside>
+<div id="tip" role="tooltip"></div>
+
+<script>
+/* ============================================================
+   MOCK DATA — replace this block with real Bitbucket / TeamCity /
+   JFrog data later. Everything below it only reads from S,
+   RELEASES, FEATS, BUILDS and HEAD_264.
+   ============================================================ */
+const TODAY = '2026-11-16';
+const day = s => new Date(s + 'T12:00:00');
+const fmtD = s => day(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const dayDiff = s => Math.round((day(s) - day(TODAY)) / 864e5);
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const rel = s => { const n = dayDiff(s); return n === 0 ? 'today' : n > 0 ? `in ${plural(n, 'day')}` : `${plural(-n, 'day')} ago`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const STATUS = {
+  todo:     { label: 'Not started' },
+  progress: { label: 'In progress' },
+  done:     { label: 'Completed' },
+  blocked:  { label: 'Blocked' },
+};
+const LINES = {
+  master: { label: 'master',     c: 'var(--l-master)' },
+  db:     { label: 'db-scripts', c: 'var(--l-db)' },
+  '26.4': { label: '26.4',       c: 'var(--l-r1)' },
+  '26.3': { label: '26.3',       c: 'var(--l-r2)' },
+  '26.2': { label: '26.2',       c: 'var(--l-r3)' },
+};
+
+/* The checklist every release goes through after the branch is cut. */
+const TASKS = [
+  { key: 'tc', name: 'TC jobs', title: 'Duplicate TeamCity jobs', system: 'TeamCity', owner: 'Hugo B.',
+    ref: (v, n) => `teamcity.example.com/project/Orion_Release${n}`,
+    subs: (v, n) => [`VCS root → release/${v}`, `Orion_${n}_Build`, `Orion_${n}_UnitTests`, `Orion_${n}_IntegrationTests`, `Orion_${n}_Packaging`, `Orion_${n}_NightlyRegression`] },
+  { key: 'bump', name: 'Version bump', title: 'Bump versions', system: 'Bitbucket', owner: 'Camille R.',
+    ref: v => `bitbucket.example.com/orion/suite/branches`,
+    subs: v => ['master moved to next version', `release/${v} version pinned`, 'Changelog section opened'] },
+  { key: 'dbrun', name: 'DB dry-run', title: 'DB upgrade dry-run', system: 'DB scripts', owner: 'Inès D.',
+    ref: v => `bitbucket.example.com/orion/db-scripts/releases/${v}/head.txt`,
+    subs: v => ['Fresh install from head.txt', 'Upgrade from previous release', 'Rollback scripts checked'] },
+  { key: 'freeze', name: 'Code freeze', title: 'Code freeze', system: 'Bitbucket', owner: 'Camille R.',
+    ref: v => `bitbucket.example.com/orion/suite/settings/branch-permissions`,
+    subs: v => [`release/${v} restricted to release managers`, 'Freeze announced to teams'] },
+  { key: 'rc', name: 'RC build', title: 'Release-candidate build', system: 'TeamCity', owner: 'Hugo B.',
+    ref: (v, n) => `teamcity.example.com/buildConfiguration/Orion_${n}_Build`,
+    subs: v => ['Build green on release branch', 'Integration suite green', 'RC tagged'] },
+  { key: 'qa', name: 'QA sign-off', title: 'QA sign-off', system: 'QA', owner: 'Sofia K.',
+    ref: v => `qa.example.com/campaigns/orion-${v}`,
+    subs: v => ['Regression campaign', 'Performance baseline', 'Sign-off recorded'] },
+  { key: 'jfrog', name: 'JFrog package', title: 'Packaging on JFrog', system: 'JFrog', owner: 'Lucas M.',
+    ref: v => `jfrog.example.com/artifactory/orion-release-local/${v}.0/`,
+    subs: v => ['Installer published', 'Docker image published', 'DB bundle published', 'Checksums & SBOM'] },
+  { key: 'ga', name: 'GA', title: 'General availability', system: 'Release', owner: 'Camille R.',
+    ref: v => `bitbucket.example.com/orion/suite/tags/v${v}.0`,
+    subs: v => ['Tag created', 'Release notes published', 'Customers notified'] },
+];
+const HF_SUBS = ['Fix merged to release branch', 'Build green', 'Installer published', 'Docker image published', 'DB bundle published', 'Checksums & SBOM', 'Tag created'];
+const allDone = (...dates) => Object.fromEntries(TASKS.map((t, i) => [t.key, ['done', dates[i]]]));
+
+const RELEASES = [
+  { v: '26.4', phase: 'Branch prep', cut: '2026-11-09', sha: 'a91f3c2', xb: 610, lane: 315,
+    tasks: {
+      tc:     ['progress', '2026-11-12', [1, 1, 1, 1, 0, 0], 'Packaging and NightlyRegression still have to be copied from the master templates.'],
+      bump:   ['done', '2026-11-09'],
+      dbrun:  ['todo', '2026-11-20', null, 'Waiting for releases/26.4/head.txt, which is currently blocked.'],
+      freeze: ['todo', '2026-11-23'], rc: ['todo', '2026-11-25'], qa: ['todo', '2026-12-04'],
+      jfrog:  ['todo', '2026-12-09'], ga: ['todo', '2026-12-14'],
+    }, hotfixes: [] },
+  { v: '26.3', phase: 'Live · hotfixing', cut: '2026-08-17', sha: '5d07be1', xb: 390, lane: 415,
+    tasks: allDone('2026-08-18', '2026-08-17', '2026-08-26', '2026-08-31', '2026-09-02', '2026-09-21', '2026-09-24', '2026-09-28'),
+    hotfixes: [
+      { v: '26.3.1', status: 'done', date: '2026-10-26', owner: 'Lucas M.' },
+      { v: '26.3.2', status: 'progress', date: '2026-11-13', owner: 'Lucas M.', mask: [1, 1, 1, 0, 1, 0, 0],
+        note: 'Docker image push failed: storage quota reached on orion-docker-local.' },
+    ] },
+  { v: '26.2', phase: 'Maintenance', cut: '2026-05-11', sha: 'c3e88a0', xb: 170, lane: 515,
+    tasks: allDone('2026-05-12', '2026-05-11', '2026-05-20', '2026-05-25', '2026-05-27', '2026-06-08', '2026-06-11', '2026-06-15'),
+    hotfixes: [
+      { v: '26.2.1', status: 'done', date: '2026-07-06', owner: 'Lucas M.' },
+      { v: '26.2.2', status: 'done', date: '2026-08-24', owner: 'Lucas M.' },
+      { v: '26.2.3', status: 'done', date: '2026-10-19', owner: 'Lucas M.' },
+    ] },
+];
+
+const HEAD_264 = [
+  '0401_create_audit_log.sql', '0402_audit_log_fk.sql', '0403_alter_customer_add_locale.sql', '0404_backfill_locale.sql',
+  '0405_idx_orders_created.sql', '0406_drop_legacy_export.sql', '0407_grant_reporting_role.sql', '0408_seq_invoice_reset.sql',
+  '0409_view_open_orders.sql', '0410_alter_export_job.sql', '0411_seed_feature_flags.sql', '0412_add_audit_index.sql',
+].map((f, i) => ({ f, ok: i !== 11 }));
+
+/* Station registry: every clickable thing on the map lives here, keyed by id. */
+const S = {};
+function add(st) {
+  st.subs = (st.subs || []).map((x, i) => typeof x === 'string' ? { t: x, done: st.mask ? !!st.mask[i] : st.status === 'done' } : x);
+  S[st.id] = st;
+}
+
+RELEASES.forEach(r => {
+  const n = r.v.replace('.', '');
+  add({ id: `master:cut-${r.v}`, line: 'master', name: `${r.v} cut`, title: `Create branch release/${r.v}`, system: 'Bitbucket', owner: 'Camille R.',
+    status: 'done', date: r.cut, ref: `bitbucket.example.com/orion/suite/branch/release/${r.v}`,
+    note: `Branched from master at ${r.sha}.`,
+    subs: [`release/${r.v} created from master`, 'Branch permissions applied', 'Default reviewers & merge checks'] });
+  TASKS.forEach(t => {
+    const [status, date, mask, note] = r.tasks[t.key];
+    add({ id: `${r.v}:${t.key}`, line: r.v, name: t.name, title: t.title, system: t.system, owner: t.owner, status, date, mask, note,
+      ref: t.ref(r.v, n), subs: t.subs(r.v, n) });
+  });
+  r.hotfixes.forEach(h => add({ id: `hf:${h.v}`, line: r.v, name: h.v, title: `Hotfix ${h.v}`, system: 'Release', owner: h.owner,
+    status: h.status, date: h.date, mask: h.mask, note: h.note, ref: `jfrog.example.com/artifactory/orion-release-local/${h.v}/`, subs: HF_SUBS }));
+});
+
+add({ id: 'master:head', line: 'master', name: 'HEAD', title: 'master HEAD', system: 'TeamCity', owner: 'Build agents', status: 'done',
+  subBy: { done: '#4812 · passing', blocked: '#4812 · failing' }, ref: 'teamcity.example.com/buildConfiguration/Orion_Master_Build/4812',
+  note: 'e41c9a7 “Tune export batch size” — 6 412 tests passed, built and packaged in 14 min 05 s.',
+  subs: ['Build', 'Unit & integration tests', 'Packaging'] });
+add({ id: 'master:cut-27.1', line: 'master', name: '27.1 cut', title: 'Create branch release/27.1', system: 'Bitbucket', owner: 'Camille R.',
+  status: 'todo', date: '2027-02-15', subBy: { todo: 'planned 15 Feb' }, ref: 'bitbucket.example.com/orion/suite/branches',
+  subs: ['release/27.1 created from master', 'Branch permissions applied', 'Default reviewers & merge checks'] });
+
+add({ id: 'db:26.2', line: 'db', name: 'head.txt · 26.2', title: 'releases/26.2/head.txt', system: 'DB scripts', owner: 'Inès D.', status: 'done', date: '2026-05-11',
+  scripts: 38, subBy: { done: '38 scripts' }, ref: 'bitbucket.example.com/orion/db-scripts/releases/26.2/head.txt',
+  subs: ['releases/26.2/head.txt created', 'Every listed script exists in the repo', 'Execution order reviewed by DBA'] });
+add({ id: 'db:26.3', line: 'db', name: 'head.txt · 26.3', title: 'releases/26.3/head.txt', system: 'DB scripts', owner: 'Inès D.', status: 'done', date: '2026-08-17',
+  scripts: 41, subBy: { done: '41 scripts' }, ref: 'bitbucket.example.com/orion/db-scripts/releases/26.3/head.txt',
+  subs: ['releases/26.3/head.txt created', 'Every listed script exists in the repo', 'Execution order reviewed by DBA'] });
+add({ id: 'db:26.4', line: 'db', name: 'head.txt · 26.4', title: 'releases/26.4/head.txt', system: 'DB scripts', owner: 'Inès D.', status: 'blocked', date: '2026-11-10',
+  scripts: 12, subBy: { blocked: '1 script missing', done: '12 scripts' }, ref: 'bitbucket.example.com/orion/db-scripts/releases/26.4/head.txt',
+  note: 'head.txt lists 0412_add_audit_index.sql, but that script is not in the repo yet (db-scripts PR #77 is still open).',
+  head: true, mask: [1, 0, 0],
+  subs: ['releases/26.4/head.txt created', 'Every listed script exists in the repo', 'Execution order reviewed by DBA'] });
+add({ id: 'db:master', line: 'db', name: 'head.txt · master', title: 'head.txt (master)', system: 'DB scripts', owner: 'Inès D.', status: 'progress',
+  scripts: 14, subBy: { progress: '14 scripts queued', done: '14 scripts' }, ref: 'bitbucket.example.com/orion/db-scripts/head.txt',
+  note: 'Collects the scripts that will ship with 27.1. Last change today 09:12.', mask: [1, 1, 0],
+  subs: ['head.txt reset after 26.4 cut', 'New scripts appended in order', 'Nightly run against DEV database green'] });
+
+const FEATS = [
+  { id: 'feat:audit-log', name: 'feature/audit-log', pr: 476, author: 'Sofia K.', age: 'merged 12 Nov', status: 'done', merged: true,
+    pts: [[640, 215], [683, 172], [747, 172], [790, 215]], sx: 715, lx: 715, note: 'Merged into master, build #4806 green.',
+    subs: ['Pull request approved', 'Build green', 'Merged into master'] },
+  { id: 'feat:import-npe', name: 'fix/import-npe', pr: 481, author: 'Hugo B.', age: 'merged 13 Nov', status: 'done', merged: true,
+    pts: [[860, 215], [903, 172], [947, 172], [990, 215]], sx: 925, lx: 925, note: 'Merged into master, build #4810 green.',
+    subs: ['Pull request approved', 'Build green', 'Merged into master'] },
+  { id: 'feat:sso-okta', name: 'feature/sso-okta', pr: 482, author: 'Lucas M.', age: 'open 9 days', status: 'progress',
+    pts: [[800, 215], [887, 128], [1000, 128]], sx: 1000, lx: 938, mask: [1, 1, 0], note: '2 approvals, waiting for the security review before merge.',
+    subs: ['Pull request approved', 'Build green', 'Merged into master'] },
+  { id: 'feat:export-timeout', name: 'fix/export-timeout', pr: 491, author: 'Inès D.', age: 'open 2 days', status: 'blocked',
+    pts: [[1015, 215], [1058, 172], [1095, 172]], sx: 1095, lx: 1060, mask: [0, 0, 0], note: 'Build failing on PR #491 — 3 integration tests red in ExportJobIT.',
+    subs: ['Pull request approved', 'Build green', 'Merged into master'] },
+];
+FEATS.forEach(f => add({ id: f.id, line: 'master', name: f.name, title: f.name, system: 'Bitbucket', owner: f.author, status: f.status, mask: f.mask,
+  note: f.note, ref: `bitbucket.example.com/orion/suite/pull-requests/${f.pr}`, subs: f.subs, feat: f }));
+
+const BUILDS = (() => {
+  const msgs = ['Tune export batch size', 'Merge fix/import-npe', 'Bump jackson to 2.19', 'Order view pagination', 'Merge feature/audit-log', 'Fix flaky LocaleIT',
+    'Cache tenant settings', 'Invoice rounding rule', 'Update translations', 'Refactor ExportJob', 'Add audit index migration', 'Harden CSV parser'];
+  const who = ['Inès D.', 'Hugo B.', 'Sofia K.', 'Lucas M.', 'Camille R.'];
+  const fails = { 4797: ['p', 'p', 'f'], 4803: ['p', 'f', 's'] };
+  return Array.from({ length: 18 }, (_, i) => {
+    const n = 4795 + i;
+    return { n, stages: fails[n] || ['p', 'p', 'p'], msg: msgs[(17 - i) % msgs.length], who: who[i % who.length], dur: 13 + (i * 7) % 4, sec: (i * 37) % 60 };
+  });
+})();
+
+/* ============================================================
+   STATE (your edits are kept in this browser only)
+   ============================================================ */
+const KEY = 'lc-mock-v1';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+Object.entries(saved).forEach(([id, o]) => {
+  if (!S[id]) return;
+  S[id].status = o.status;
+  S[id].subs.forEach((s, i) => { s.done = !!o.subs[i]; });
+});
+function persist(st) {
+  saved[st.id] = { status: st.status, subs: st.subs.map(s => s.done) };
+  try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+}
+let openId = null, focusLine = null;
+
+const lateDays = st => (st.status === 'done' || !st.date) ? 0 : Math.max(0, -dayDiff(st.date));
+const doneCount = st => st.subs.filter(s => s.done).length;
+function subLabel(st) {
+  if (st.subBy && st.subBy[st.status]) return st.subBy[st.status];
+  if (st.status === 'done') return st.date ? fmtD(st.date) : 'done';
+  if (st.status === 'blocked') return 'blocked';
+  if (st.status === 'progress') return `${doneCount(st)}/${st.subs.length}${lateDays(st) ? ' · late' : ''}`;
+  return st.date ? fmtD(st.date) : 'not started';
+}
+function whenLabel(st) {
+  if (!st.date) return '—';
+  if (st.status === 'done') return `Completed ${fmtD(st.date)}`;
+  const l = lateDays(st);
+  return l ? `Due ${fmtD(st.date)} · ${plural(l, 'day')} overdue` : `Due ${fmtD(st.date)} · ${rel(st.date)}`;
+}
+const steps = r => [S[`master:cut-${r.v}`], S[`db:${r.v}`], ...TASKS.map(t => S[`${r.v}:${t.key}`])];
+
+/* ============================================================
+   RENDERING
+   ============================================================ */
+function mark(status, r = 10) {
+  const k = r / 10;
+  if (status === 'done') return `<circle r="${r}" fill="var(--good)"/><path transform="scale(${k})" d="M-4.6 .4 L-1.4 3.6 L4.8 -3.2" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`;
+  if (status === 'progress') return `<circle r="${r}" fill="var(--warn)"/><g transform="scale(${k})" fill="#0b0b0b"><circle cx="-4.3" r="1.5"/><circle r="1.5"/><circle cx="4.3" r="1.5"/></g>`;
+  if (status === 'blocked') return `<circle r="${r}" fill="var(--crit)"/><g transform="scale(${k})"><path d="M0 -5.2 V1" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cy="4.7" r="1.6" fill="#fff"/></g>`;
+  return `<circle r="${r - 1.5}" fill="var(--surface)" stroke="var(--muted)" stroke-width="3"/>`;
+}
+const icon = (status, size = 16) => `<svg class="ico" width="${size}" height="${size}" viewBox="-12 -12 24 24" aria-hidden="true">${mark(status)}</svg>`;
+const chip = status => `<span class="chip">${icon(status, 15)}${STATUS[status].label}</span>`;
+const bullet = line => `<span class="bullet" style="--c:${LINES[line].c}">${LINES[line].label}</span>`;
+
+function stationSvg(st, x, y, o = {}) {
+  const r = o.r || 10, pos = o.pos || 'below';
+  const nm = esc(st.name), sb = esc(subLabel(st));
+  let lab = '';
+  if (pos === 'below') lab = o.small ? `<text class="nm sm" y="${r + 17}" text-anchor="middle">${nm}</text>`
+    : `<text class="nm" y="${r + 21}" text-anchor="middle">${nm}</text><text class="sb" y="${r + 35}" text-anchor="middle">${sb}</text>`;
+  if (pos === 'above') lab = `<text class="nm" y="${-(r + 26)}" text-anchor="middle">${nm}</text><text class="sb" y="${-(r + 12)}" text-anchor="middle">${sb}</text>`;
+  if (pos === 'left') lab = `<text class="nm" x="-16" y="-31" text-anchor="end">${nm}</text><text class="sb" x="-16" y="-17" text-anchor="end">${sb}</text>`;
+  if (pos === 'right') lab = `<text class="nm" x="16" y="-31">${nm}</text><text class="sb" x="16" y="-17">${sb}</text>`;
+  const pulse = st.status === 'progress' ? `<circle class="pulse" r="${r}"/>` : o.live ? `<circle class="pulse live" r="${r}"/>` : '';
+  return `<g class="st${st.id === openId ? ' is-open' : ''}" data-id="${st.id}" tabindex="0" role="button" transform="translate(${x} ${y})"
+    aria-label="${esc(st.title)}, ${LINES[st.line].label} line, ${STATUS[st.status].label}">
+    <circle r="${r + 11}" fill="transparent"/>${pulse}<circle class="ring" r="${r + 3.5}"/>${mark(st.status, r)}${lab}</g>`;
+}
+function pill(x, cy, w, line) {
+  return `<g class="pill" data-focus="${line}" tabindex="0" role="button" aria-label="Isolate the ${LINES[line].label} line">
+    <rect x="${x}" y="${cy - 13}" width="${w}" height="26" rx="13" fill="${LINES[line].c}"/>
+    <text class="pilltx" x="${x + w / 2}" y="${cy + 4.5}" text-anchor="middle">${LINES[line].label}</text></g>`;
+}
+
+function renderMap() {
+  const MY = 215, DY = 70, STEP = 93;
+  const g = {};
+  const dim = (...lines) => focusLine && !lines.includes(focusLine) ? ' dim' : '';
+
+  // interchange walkways between the code line and the DB line
+  g.link = [170, 390, 610, 1140].map(x => `<path class="walk" d="M${x} ${DY + 15} V${MY - 16}"/>`).join('');
+
+  // DB scripts line
+  g.db = `<path class="track" style="stroke:var(--l-db)" d="M112 ${DY} H1140"/><path class="track pending" style="stroke:var(--l-db)" d="M1140 ${DY} H1520"/>`
+    + pill(24, DY, 88, 'db')
+    + stationSvg(S['db:26.2'], 170, DY, { pos: 'above' }) + stationSvg(S['db:26.3'], 390, DY, { pos: 'above' })
+    + stationSvg(S['db:26.4'], 610, DY, { pos: 'above' }) + stationSvg(S['db:master'], 1140, DY, { pos: 'above' });
+
+  // master line, with feature / fix branches looping above it
+  let m = '';
+  FEATS.forEach(f => {
+    m += `<path class="feat" d="M${f.pts.map(p => p.join(' ')).join(' L')}"/>`;
+    m += `<text class="fl" x="${f.lx}" y="${f.pts[1][1] - 15}" text-anchor="middle">${f.name}</text>`;
+  });
+  m += `<path class="ghost" d="M1340 ${MY} L1400 ${MY + 60}"/><text class="sb" x="1410" y="${MY + 66}">release/27.1 · planned</text>`;
+  m += `<path class="track m" style="stroke:var(--l-master)" d="M92 ${MY} H1140"/><path class="track m pending" style="stroke:var(--l-master)" d="M1140 ${MY} H1520"/>`;
+  m += pill(24, MY, 68, 'master');
+  FEATS.forEach(f => { m += stationSvg(S[f.id], f.sx, f.pts[1][1], { r: 7.5, pos: 'none' }); });
+  RELEASES.forEach(r => { m += stationSvg(S[`master:cut-${r.v}`], r.xb, MY, { pos: 'left' }); });
+  m += stationSvg(S['master:head'], 1140, MY, { pos: 'right', live: true });
+  m += stationSvg(S['master:cut-27.1'], 1340, MY, { pos: 'above' });
+  g.master = m;
+
+  // one line per release
+  RELEASES.forEach(r => {
+    const c = LINES[r.v].c, y = r.lane, xH = r.xb + (y - MY), x0 = xH + 35;
+    const sts = TASKS.map(t => S[`${r.v}:${t.key}`]);
+    const xs = sts.map((_, i) => x0 + i * STEP), xl = xs[xs.length - 1];
+    let reach = -1;
+    sts.forEach((s, i) => { if (s.status !== 'todo') reach = i; });
+    const rx = reach < 0 ? xH : xs[reach];
+    let h = `<path class="track" style="stroke:${c}" d="M${r.xb} ${MY} L${xH} ${y} H${rx}"/>`;
+    if (rx < xl) h += `<path class="track pending" style="stroke:${c}" d="M${rx} ${y} H${xl}"/>`;
+    if (r.hotfixes.length) h += `<path class="tail" style="stroke:${c}" d="M${xl} ${y} H${xl + 60 * r.hotfixes.length + 26}"/>`;
+    h += pill(xH - 80, y, 58, r.v) + `<text class="sb" x="${xH - 22}" y="${y + 31}" text-anchor="end">${r.phase}</text>`;
+    sts.forEach((s, i) => { h += stationSvg(s, xs[i], y); });
+    r.hotfixes.forEach((hf, i) => { h += stationSvg(S[`hf:${hf.v}`], xl + 60 * (i + 1), y, { r: 6.5, small: true }); });
+    g[r.v] = h;
+  });
+
+  document.getElementById('map').innerHTML =
+    `<svg viewBox="0 0 1560 585" role="group" aria-label="Subway map of the software lifecycle">
+      <g class="ln${dim('master', 'db')}">${g.link}</g>
+      ${RELEASES.map(r => `<g class="ln${dim(r.v)}">${g[r.v]}</g>`).join('')}
+      <g class="ln${dim('db')}">${g.db}</g>
+      <g class="ln${dim('master')}">${g.master}</g>
+    </svg>`;
+
+  document.getElementById('lines').innerHTML = Object.entries(LINES).map(([k, l]) =>
+    `<button class="linebtn" data-focus="${k}" aria-pressed="${focusLine === k}" style="--c:${l.c}"><i></i>${k === 'master' || k === 'db' ? l.label : 'release/' + l.label}</button>`).join('');
+}
+
+function attention() {
+  const items = [];
+  Object.values(S).forEach(st => {
+    const l = lateDays(st);
+    if (st.status === 'blocked') items.push({ sev: 0, st, text: st.note || 'Blocked' });
+    else if (l) items.push({ sev: 1, st, late: l, text: `${plural(l, 'day')} overdue (due ${fmtD(st.date)}) — ${doneCount(st)}/${st.subs.length} checks done` });
+  });
+  return items.sort((a, b) => a.sev - b.sev || (b.late || 0) - (a.late || 0));
+}
+
+function renderKpis() {
+  const next = RELEASES.find(r => S[`${r.v}:ga`].status !== 'done') || RELEASES[0];
+  const st = steps(next), nDone = st.filter(s => s.status === 'done').length;
+  const ga = S[`${next.v}:ga`], fr = S[`${next.v}:freeze`];
+  const last = BUILDS[BUILDS.length - 1], ok = BUILDS.filter(b => b.stages.every(s => s === 'p')).length;
+  const lastOk = last.stages.every(s => s === 'p');
+  const att = attention(), nb = att.filter(a => a.sev === 0).length;
+  document.getElementById('kpis').innerHTML = `
+    <div class="card kpi"><div class="l">Next release</div><div class="v">${bullet(next.v)} GA ${rel(ga.date)}</div><div class="h">${fmtD(ga.date)} · ${next.phase}</div></div>
+    <div class="card kpi"><div class="l">Code freeze · ${next.v}</div><div class="v">${fr.status === 'done' ? 'Frozen' : rel(fr.date).replace(/^in /, '')}</div><div class="h">${fr.status === 'done' ? 'since' : 'on'} ${fmtD(fr.date)}</div></div>
+    <div class="card kpi"><div class="l">Readiness · ${next.v}</div><div class="v">${nDone} / ${st.length}</div><div class="bar"><i style="width:${nDone / st.length * 100}%"></i></div><div class="h">release steps completed</div></div>
+    <div class="card kpi"><div class="l">master build</div><div class="v">${icon(lastOk ? 'done' : 'blocked', 22)} ${lastOk ? 'Passing' : 'Failing'}</div><div class="h">#${last.n} · ${ok} of ${BUILDS.length} recent builds green</div></div>
+    <div class="card kpi"><div class="l">Needs attention</div><div class="v">${att.length ? icon(nb ? 'blocked' : 'progress', 22) : icon('done', 22)} ${att.length}</div><div class="h">${nb} blocked · ${att.length - nb} overdue</div></div>`;
+}
+
+function renderAttention() {
+  const att = attention();
+  document.getElementById('attn-n').textContent = att.length ? `${att.length} open` : '';
+  document.getElementById('attn').innerHTML = att.length ? att.map(a => `
+    <li data-id="${a.st.id}">${icon(a.sev === 0 ? 'blocked' : 'progress', 18)}
+      <div><div class="t">${esc(a.st.title)}</div><div class="d">${esc(a.text)}</div></div>
+      <div class="r">${bullet(a.st.line)}</div></li>`).join('')
+    : `<li class="empty" style="cursor:default">Nothing blocked or overdue. The lines are running on time.</li>`;
+}
+
+function renderReadiness() {
+  document.getElementById('ready').innerHTML = RELEASES.map(r => {
+    const st = steps(r), n = st.filter(s => s.status === 'done').length;
+    const nx = st.find(s => s.status !== 'done'), ga = S[`${r.v}:ga`];
+    const hf = r.hotfixes.filter(h => S[`hf:${h.v}`].status !== 'done').length;
+    return `<button class="rc" data-focus="${r.v}" aria-pressed="${focusLine === r.v}" style="--c:${LINES[r.v].c}">
+      <div class="h1">${bullet(r.v)}<span class="ph">${r.phase}</span><span class="cnt">${n}/${st.length}</span></div>
+      <div class="strip">${st.map(s => `<span data-tip="${esc(s.title)} — ${STATUS[s.status].label}">${icon(s.status, 16)}</span>`).join('')}</div>
+      <div class="nx">${nx ? `Next: <b>${esc(nx.title)}</b> · ${STATUS[nx.status].label.toLowerCase()}${nx.date ? ' · ' + (lateDays(nx) ? plural(lateDays(nx), 'day') + ' overdue' : 'due ' + fmtD(nx.date)) : ''}`
+        : `Released <b>${fmtD(ga.date)}</b> · ${r.hotfixes.length ? plural(r.hotfixes.length, 'hotfix').replace('hotfixs', 'hotfixes') + (hf ? `, ${hf} in progress` : '') : 'no hotfix'}`}</div>
+    </button>`;
+  }).join('');
+}
+
+function renderPipeline() {
+  const ok = BUILDS.filter(b => b.stages.every(s => s === 'p')).length;
+  const lastFail = [...BUILDS].reverse().find(b => b.stages.includes('f'));
+  const names = ['Build', 'Tests', 'Package'], word = { p: 'passed', f: 'failed', s: 'skipped' };
+  const rows = names.map((nm, si) => `<div class="rl">${nm}</div>` + BUILDS.map(b =>
+    `<div class="cell ${b.stages[si]}" data-tip="#${b.n} · ${nm} ${word[b.stages[si]]}|${esc(b.msg)} — ${b.who}, ${b.dur} min ${b.sec} s">${b.stages[si] === 'f' ? '×' : ''}</div>`).join('')).join('');
+  const axis = `<div></div>` + BUILDS.map((b, i) => `<div class="ax">${i === 0 || i === BUILDS.length - 1 ? '#' + b.n : ''}</div>`).join('');
+  document.getElementById('pipe').innerHTML = `
+    <div class="stats"><div><b>${Math.round(ok / BUILDS.length * 100)}%</b><span>green builds (${ok}/${BUILDS.length})</span></div>
+      <div><b>14 min</b><span>median duration</span></div>
+      <div><b>#${lastFail.n}</b><span>last failure · ${names[lastFail.stages.indexOf('f')]}</span></div></div>
+    <div class="pipe">${rows}${axis}</div>
+    <div class="legend" style="margin-top:12px"><span class="chip"><span class="cell p" style="width:14px"></span>passed</span><span class="chip"><span class="cell f" style="width:14px">×</span>failed</span><span class="chip"><span class="cell s" style="width:14px"></span>skipped</span></div>`;
+}
+
+function renderBranches() {
+  document.getElementById('branches').innerHTML = FEATS.map(f => {
+    const st = S[f.id];
+    const state = st.status === 'done' ? 'Merged' : st.status === 'blocked' ? 'Build failing' : st.status === 'progress' ? 'In review' : 'Not started';
+    return `<li data-id="${f.id}">${icon(st.status, 18)}
+      <div><div class="t mono">${f.name}</div><div class="d">PR #${f.pr} · ${f.author} · ${f.age}</div></div>
+      <div class="r">${state}</div></li>`;
+  }).join('');
+}
+
+function headPreview() {
+  const fixed = S['db:26.4'].subs[1].done;
+  return `<div class="code" aria-label="Content of releases/26.4/head.txt">` + HEAD_264.slice(6).map((l, i) => {
+    const ok = l.ok || fixed;
+    return `<div><span class="no">${i + 7}</span><span class="${ok ? '' : 'miss'}">${l.f}</span>${ok ? '' : `<span class="chip tag">${icon('blocked', 14)}not in repo</span>`}</div>`;
+  }).join('') + `</div>`;
+}
+
+function renderDb() {
+  const rows = [['head.txt (master)', 'db:master'], ['releases/26.4/head.txt', 'db:26.4'], ['releases/26.3/head.txt', 'db:26.3'], ['releases/26.2/head.txt', 'db:26.2']];
+  document.getElementById('db').innerHTML = `
+    <table><thead><tr><th>File</th><th>Scripts</th><th>State</th><th>Detail</th></tr></thead><tbody>
+    ${rows.map(([f, id]) => { const st = S[id]; return `<tr class="click" data-id="${id}"><td class="mono">${f}</td><td>${st.scripts}</td><td>${chip(st.status)}</td><td style="color:var(--ink-2)">${esc(subLabel(st))}</td></tr>`; }).join('')}
+    </tbody></table>
+    <div class="sub" style="color:var(--ink-2);font-size:12.5px;margin-top:14px">releases/26.4/head.txt — lines 7 to 12</div>${headPreview()}`;
+}
+
+function renderJfrog() {
+  const cols = ['Installer', 'Docker image', 'DB bundle', 'Checksums'];
+  const rows = [['26.4.0', '26.4:jfrog'], ['26.3.2', 'hf:26.3.2'], ['26.3.1', 'hf:26.3.1'], ['26.3.0', '26.3:jfrog'], ['26.2.3', 'hf:26.2.3']];
+  const cell = (st, col) => {
+    const sub = st.subs.find(s => s.t.startsWith(col));
+    if (sub.done) return `<span class="chip">${icon('done', 15)}published</span>`;
+    if (st.status === 'todo') return `<span class="chip" style="color:var(--ink-2)">${icon('todo', 15)}not due yet</span>`;
+    return `<span class="chip"><b>${icon('blocked', 15)}</b><b>missing</b></span>`;
+  };
+  document.getElementById('jfrog').innerHTML = `
+    <table><thead><tr><th>Version</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
+    ${rows.map(([v, id]) => `<tr class="click" data-id="${id}"><td><b>${v}</b></td>${cols.map(c => `<td>${cell(S[id], c)}</td>`).join('')}</tr>`).join('')}
+    </tbody></table>
+    <div class="hint">Repository <span class="mono">orion-release-local</span> · a version is complete when all four artifacts are published.</div>`;
+}
+
+function renderDrawer() {
+  const el = document.getElementById('drawer');
+  el.classList.toggle('open', !!openId);
+  if (!openId) { el.innerHTML = ''; return; }
+  const st = S[openId], n = doneCount(st);
+  el.innerHTML = `
+    <button class="btn x" data-close data-k="close" aria-label="Close details">✕</button>
+    <div class="where">${bullet(st.line)}<span>${st.system}</span></div>
+    <h3>${esc(st.title)}</h3>
+    <div class="where">${esc(subLabel(st))}</div>
+    <div class="seg" role="group" aria-label="Status">${Object.keys(STATUS).map(k =>
+      `<button data-set="${k}" data-k="set-${k}" aria-pressed="${st.status === k}">${icon(k, 16)}${STATUS[k].label}</button>`).join('')}</div>
+    <dl class="meta"><dt>Owner</dt><dd>${esc(st.owner)}</dd><dt>When</dt><dd>${whenLabel(st)}</dd><dt>Source</dt><dd class="mono">${esc(st.ref || '—')}</dd></dl>
+    ${st.note ? `<div class="note">${esc(st.note)}</div>` : ''}
+    <h4><span>Checklist</span><span>${n} / ${st.subs.length}</span></h4>
+    <div class="bar"><i style="width:${st.subs.length ? n / st.subs.length * 100 : 0}%"></i></div>
+    <div class="checks">${st.subs.map((s, i) => `<label><input type="checkbox" data-sub="${i}" data-k="sub-${i}" ${s.done ? 'checked' : ''}><span class="${s.done ? 'dn' : ''}">${esc(s.t)}</span></label>`).join('')}</div>
+    ${st.head ? `<h4 style="margin-top:16px"><span>head.txt — lines 7 to 12</span></h4>${headPreview()}` : ''}
+    <div class="hint">Mock data: changes are saved in this browser only. Use “Reset mock data” to start over.</div>`;
+}
+
+function renderAll() {
+  const k = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
+  const id = document.activeElement && document.activeElement.closest ? (document.activeElement.closest('.st') || {}).dataset : null;
+  renderKpis(); renderMap(); renderAttention(); renderReadiness(); renderBranches(); renderDb(); renderJfrog(); renderDrawer();
+  const again = k ? document.querySelector(`[data-k="${k}"]`) : id ? document.querySelector(`.st[data-id="${id.id}"]`) : null;
+  if (again) again.focus({ preventScroll: true });
+}
+
+/* ============================================================
+   INTERACTION
+   ============================================================ */
+function setStatus(st, status) {
+  st.status = status;
+  if (status === 'done') st.subs.forEach(s => { s.done = true; });
+  if (status === 'todo') st.subs.forEach(s => { s.done = false; });
+  persist(st); renderAll();
+}
+function toggleSub(st, i, on) {
+  st.subs[i].done = on;
+  const n = doneCount(st);
+  st.status = n === st.subs.length ? 'done' : st.status === 'blocked' ? 'blocked' : n ? 'progress' : 'todo';
+  persist(st); renderAll();
+}
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('[data-close]')) { openId = null; return renderAll(); }
+  const set = t.closest('[data-set]');
+  if (set) return setStatus(S[openId], set.dataset.set);
+  if (t.closest('.drawer')) return;
+  const f = t.closest('[data-focus]');
+  if (f) { focusLine = focusLine === f.dataset.focus ? null : f.dataset.focus; return renderAll(); }
+  const s = t.closest('[data-id]');
+  if (s) { openId = s.dataset.id; return renderAll(); }
+  if (t.closest('#theme')) {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('lc-theme', next); } catch (err) {}
+  }
+  if (t.closest('#reset')) { try { localStorage.removeItem(KEY); } catch (err) {} location.reload(); }
+});
+document.addEventListener('change', e => {
+  if (e.target.matches('[data-sub]')) toggleSub(S[openId], +e.target.dataset.sub, e.target.checked);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && openId) { openId = null; renderAll(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.st, .pill')) { e.preventDefault(); e.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); }
+});
+
+const tip = document.getElementById('tip');
+document.addEventListener('mousemove', e => {
+  const el = e.target.closest && e.target.closest('.st, [data-tip]');
+  if (!el) { tip.style.display = 'none'; return; }
+  let html;
+  if (el.dataset.tip) { const [a, b] = el.dataset.tip.split('|'); html = `<b>${esc(a)}</b>${b ? `<span>${esc(b)}</span>` : ''}`; }
+  else { const st = S[el.dataset.id]; html = `<b>${esc(st.title)}</b><span>${LINES[st.line].label} · ${STATUS[st.status].label} · ${esc(subLabel(st))}</span>`; }
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, e.clientX + 14)) + 'px';
+  tip.style.top = (e.clientY + h + 24 > window.innerHeight ? e.clientY - h - 12 : e.clientY + 18) + 'px';
+});
+
+document.getElementById('legend').innerHTML = Object.keys(STATUS).map(chip).join('')
+  + `<span class="chip"><svg class="ico" width="26" height="14" viewBox="0 0 26 14"><path d="M3 7 H23" class="track pending" style="stroke:var(--ink-2);stroke-width:5;opacity:.7;stroke-dasharray:1 8"/></svg>Planned track</span>`
+  + `<span class="chip"><svg class="ico" width="14" height="16" viewBox="0 0 14 16"><path d="M7 2 V14" class="walk"/></svg>Code ↔ DB interchange</span>`;
+renderPipeline();
+renderAll();
+</script>
+</body>
+</html>
