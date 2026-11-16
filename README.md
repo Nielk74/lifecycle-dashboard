@@ -10,7 +10,7 @@ in a browser.
 
 | File | Idea |
 |---|---|
-| `board.html` | A status board. The release being prepared is a row of large steps at the top; below it, one column per version (`master`, the release in preparation, the live one) with the same rows in each: code, TeamCity jobs, DB scripts, JFrog artifacts and the environments running that version. |
+| `board.html` | A status board. The release being prepared is a row of large steps at the top; below it, one column per version (`master`, the release in preparation, the live one) with the same rows in each: code, TeamCity jobs, DB scripts, JFrog artifacts and the environments running that version. Rows open for details, a filter shows problems only, and the open step and filter are kept in the URL. |
 | `calendar.html` | A calendar. One time axis, one row per branch, and the checklist of the selected row underneath. |
 | `subway.html` | A subway map. Each branch is a line, each preparation task a station, with supporting panels below. |
 
